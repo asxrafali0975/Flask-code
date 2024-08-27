@@ -19,7 +19,7 @@ app.config.update(
     MAIL_PORT = '465',
     MAIL_USE_SSL = True,
     MAIL_USERNAME="ashrafalistudy@gmail.com",
-    MAIL_PASSWORD = "fvvj ezai khpb vwqm"  # Make sure to set this in environment variables or secure config
+    MAIL_PASSWORD = "your secret app code"  # Make sure to set this in environment variables or secure config
 )
 mail = Mail(app)
 
