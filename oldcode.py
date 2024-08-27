@@ -1,4 +1,4 @@
-
+# INSTEAD OF RENDER TEMPLATE USE REDIRECT (PRG PATTERN)
 
 from flask import Flask, request, jsonify,render_template
 from pymongo import MongoClient
@@ -11,6 +11,7 @@ client = MongoClient('mongodb://localhost:27017/')
 db = client['flask-db'] #this is db name (which will be shown in mongo db compass )
 collection = db['users'] #this is schema name
 
+net start MongoDB
 
 
 #main code starts from here
@@ -218,7 +219,55 @@ def setcookie():
 
 
 
+# to do mail authentication
 
+
+from flask import Flask
+from flask_mail import Mail, Message
+import socket
+socket.gethostbyname('smtp.gmail.com')
+
+
+app = Flask(__name__)
+app.config.update(
+    MAIL_SERVER = 'smtp.gmail.com',
+    MAIL_PORT = '465',
+    MAIL_USE_SSL = True,
+    MAIL_USERNAME="ashrafalistudy@gmail.com" ,
+    MAIL_PASSWORD = "fvvj ezai khpb vwqm",
+)
+mail = Mail(app)
+
+
+
+@app.route('/')
+def send_email():
+    msg = Message(
+        'verification',
+        sender="ashrafalistudy@gmail.com",  # Add sender here
+        recipients=['2023bca113@axiscolleges.in'],
+        body='your wechat otp is 23897'
+    )
+    mail.send(msg)
+    return 'Email sent successfully!'
+
+def main():
+    app.run(debug=True,port=30)
+main()
+
+#OTP GENERATOR
+
+
+import pyotp
+import time
+
+totp = pyotp.TOTP('secretcode')
+ans=totp.now() # => '492039'
+time.sleep(5)
+if totp.verify(ans):
+    print("verified")
+else:
+    print("no")
 
 
 
