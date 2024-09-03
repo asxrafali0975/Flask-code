@@ -1,12 +1,16 @@
 # IMPORTS 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session,render_template_string
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session,render_template_string,send_from_directory
+from flask_socketio import SocketIO, send, emit
 from pymongo import MongoClient
-import pyotp
 from flask_mail import Mail, Message
-import socket
+from flask_cors import CORS  
+import eventlet
+import eventlet.wsgi
+
+import pyotp
+import os
 
 # Get the IP address of the SMTP server (optional)
-socket.gethostbyname('smtp.gmail.com')
 
 # Configurations
 app = Flask(__name__)
@@ -19,13 +23,27 @@ app.config.update(
     MAIL_PORT = '465',
     MAIL_USE_SSL = True,
     MAIL_USERNAME="ashrafalistudy@gmail.com",
-    MAIL_PASSWORD = "your secret app code"  # Make sure to set this in environment variables or secure config
+    MAIL_PASSWORD = "fvvj ezai khpb vwqm"  # Make sure to set this in environment variables or secure config
 )
 mail = Mail(app)
 
 app.secret_key = 'secretkeyforsession'
 
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limit max size to 16 MB
+
+app.secret_key="filesuploadsecret"
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+    
+app.config['SECRET_KEY'] = 'your_secret_key'
+socketio = SocketIO(app, async_mode='eventlet') 
+CORS(app) 
+
 # Main code
+
+
+
 @app.route("/")
 def register_page():
     return render_template("register_page.html")
@@ -100,7 +118,7 @@ def login():
 @app.route("/post/<username>", methods=["POST"])
 def add_post(username):
     if request.method == "POST":
-        user_post = request.form['post']
+        user_post = request.form.get('post')
         user = collection.find_one({"username": username})
         user['user_post'].append(user_post)
         
@@ -167,8 +185,101 @@ def user_profile2(username):
         return render_template("User_profile2.html", existinguser=user)
     return "User not found", 404
 
-def main():
-    app.run(debug=True, port=5000)
 
-if __name__ == "__main__":
-    main()
+
+@app.route('/upload',methods=["POST"])
+def upload():
+    if 'file' not in request.files:
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('index'))
+    
+    if file:
+        session['filename'] = file.filename
+        filename = file.filename
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        name=collection.find_one({"username":session.get('current_user')})
+        name["_id"]=str(name["_id"])
+        collection.update_one({"username":session.get('current_user')},{"$set":{"profilepic":filename}})
+        return render_template('User_profile.html', existinguser=name)
+        
+    
+    
+@app.route('/upload_pfp')
+def upload_pfp():
+    return render_template_string('''
+    <!doctype html>
+    <title>Upload a File</title>
+    <h1>Upload a File</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="file" required>
+      <input type="submit" value="Upload">
+    </form>
+    ''')
+    
+@app.route('/show')
+def show():
+    filename = session.get('filename')
+    if filename:
+        return render_template_string('''
+        <!doctype html>
+        <title>Uploaded File</title>
+        <img src="{{ url_for('uploaded_file', filename=filename) }}" alt="Uploaded File">
+        ''', filename=filename)
+    return 'No file uploaded'
+    
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+
+@app.route('/delete_pfp')
+def delete_pfp():
+    user=collection.find_one({"username":session.get('current_user')})
+    collection.update_one({"username":session.get('current_user')},{"$set":{"profilepic":""}})
+    return render_template('User_profile.html', existinguser=user)
+    
+    
+@app.route('/followers')
+def followers():
+    username=collection.find_one({"username": session.get('current_user')})
+    username['_id']=str(username['_id'])
+    # return username['followers']
+    session['followers']=username['followers']
+    return redirect(url_for("follower_list"))
+    
+@app.route('/follower_list')
+def follower_list():
+    return render_template("follower_list.html",followers=session.get('followers'))
+
+
+@app.route("/group_chat")
+def groupchat():
+    return render_template("group_chat.html")
+
+@socketio.on('message')
+def handle_message(msg):
+    send(msg, broadcast=True)
+
+@socketio.on('custom_event')
+def handle_custom_event():
+    emit('response', {'data': 'Received your data!'})
+
+@socketio.on('connect')
+def handle_connect():
+    emit('server_message', {'message': f"{session.get('current_user', 'A user')} joined"}, broadcast=True)
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    emit('server_message', {'message': f"{session.get('current_user', 'A user')} left"}, broadcast=True)
+
+   
+    
+
+def main():
+    socketio.run(app, debug=True, port=5000)
+
+main()
